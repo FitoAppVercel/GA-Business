@@ -10,8 +10,12 @@ from typing import List, Tuple
 import matplotlib.pyplot as plt
 
 from models import Idea
+# Importamos las funciones dummy pero las comentamos para referencia
 from utils import (generate_random_idea, simulate_llm_evaluation, 
                   simulate_llm_mutation, simulate_llm_crossover)
+# Importamos las funciones LLM reales
+from llm import (generate_idea_with_llm, evaluate_fitness_with_llm,
+                mutate_idea_with_llm, crossover_ideas_with_llm)
 from genetic import run_genetic_algorithm, initialize_population, evaluate_population, evolve
 
 # Crear la carpeta outputs si no existe
@@ -173,6 +177,8 @@ def main():
         random.seed(args.seed)
         print(f"Semilla aleatoria establecida: {args.seed}")
     
+    print("\n🧠 EJECUTANDO EN MODO LLM CON MISTRAL VÍA OLLAMA 🧠\n")
+    
     # Imprimir configuración
     print("=== Configuración del Algoritmo Genético ===")
     print(f"Tamaño de población: {args.population}")
@@ -182,12 +188,12 @@ def main():
     print(f"Tasa de mutación: {args.mutation_rate}")
     print(f"Intensidad de mutación: {args.mutation_strength}")
     
-    # Ejecutar el algoritmo genético
+    # Ejecutar el algoritmo genético usando funciones LLM reales
     final_population, avg_fitness_history = run_genetic_algorithm(
-        initializer_func=generate_random_idea,
-        evaluator_func=simulate_llm_evaluation,
-        crossover_func=simulate_llm_crossover,
-        mutation_func=simulate_llm_mutation,
+        initializer_func=generate_idea_with_llm,  # Reemplaza generate_random_idea
+        evaluator_func=evaluate_fitness_with_llm,  # Reemplaza simulate_llm_evaluation
+        crossover_func=crossover_ideas_with_llm,  # Reemplaza simulate_llm_crossover
+        mutation_func=mutate_idea_with_llm,  # Reemplaza simulate_llm_mutation
         population_size=args.population,
         num_generations=args.generations,
         crossover_rate=args.crossover_rate,
@@ -200,8 +206,9 @@ def main():
     best_fitness_history = []
     
     # Recrear la evolución para calcular el mejor fitness
-    population = initialize_population(args.population, generate_random_idea)
-    evaluate_population(population, simulate_llm_evaluation)
+    # Usamos las funciones LLM reales
+    population = initialize_population(args.population, generate_idea_with_llm)
+    evaluate_population(population, evaluate_fitness_with_llm)
     
     # Obtener stats de la población inicial
     best_fitness, _ = get_population_stats(population)
@@ -209,12 +216,12 @@ def main():
     
     # Reconstruir el historial del mejor fitness
     for i in range(args.generations):
-        # Evolucionamos para obtener la población en cada generación
+        # Evolucionamos para obtener la población en cada generación usando funciones LLM
         population = evolve(
             population,
-            simulate_llm_evaluation,
-            simulate_llm_crossover,
-            simulate_llm_mutation,
+            evaluate_fitness_with_llm,
+            crossover_ideas_with_llm,
+            mutate_idea_with_llm,
             args.crossover_rate,
             args.mutation_rate,
             args.mutation_strength,
@@ -237,12 +244,13 @@ def main():
             plot_evolution(best_fitness_history, avg_fitness_history, args)
         except ImportError:
             print("Advertencia: Matplotlib no está instalado. No se puede generar el gráfico.")
-            print("Instale matplotlib usando: pip install matplotlib")
+            print("Instale matplotlib usando: pip3 install matplotlib")
     
     print("\n=== Proceso completado ===")
     print(f"Se generaron {args.generations} generaciones con {args.population} ideas por generación.")
     print(f"CSV guardado en: outputs/fitness_log.csv")
     print(f"Gráfico guardado en: outputs/fitness_evolution.png")
+    print("\n🧠 El algoritmo genético se ejecutó con el modelo Mistral vía Ollama 🧠")
 
 if __name__ == "__main__":
     main()
