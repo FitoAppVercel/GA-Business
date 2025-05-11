@@ -4,13 +4,18 @@ Script principal para ejecutar el algoritmo genético que genera y evalúa ideas
 
 import argparse
 import random
-from typing import List
+import os
+import csv
+from typing import List, Tuple
 import matplotlib.pyplot as plt
 
 from models import Idea
 from utils import (generate_random_idea, simulate_llm_evaluation, 
                   simulate_llm_mutation, simulate_llm_crossover)
-from genetic import run_genetic_algorithm
+from genetic import run_genetic_algorithm, initialize_population, evaluate_population, evolve
+
+# Crear la carpeta outputs si no existe
+os.makedirs('outputs', exist_ok=True)
 
 def parse_arguments():
     """
@@ -40,13 +45,16 @@ def parse_arguments():
     
     return parser.parse_args()
 
-def print_population_stats(population: List[Idea], generation: int = None):
+def print_population_stats(population: List[Idea], generation: int = None) -> Tuple[float, float]:
     """
     Imprime estadísticas de la población actual.
     
     Args:
         population (List[Idea]): Población de ideas.
         generation (int, optional): Número de generación. Por defecto, None.
+        
+    Returns:
+        Tuple[float, float]: Mejor fitness y fitness promedio de la población.
     """
     # Ordenar por fitness (de mayor a menor)
     sorted_population = sorted(population, key=lambda idea: idea.fitness, reverse=True)
@@ -72,23 +80,50 @@ def print_population_stats(population: List[Idea], generation: int = None):
         print(f"\n{i}. Fitness: {idea.fitness:.4f}")
         print(f"   Problema: {idea.problem}")
         print(f"   Solución: {idea.solution}")
+        
+    return best_fitness, avg_fitness
 
-def plot_evolution(avg_fitness_history, args):
+def save_fitness_log(best_fitness_history: List[float], avg_fitness_history: List[float]) -> None:
     """
-    Genera un gráfico de la evolución del fitness promedio a lo largo de las generaciones.
+    Guarda el historial de fitness en un archivo CSV.
     
     Args:
-        avg_fitness_history (List[float]): Lista de fitness promedio por generación.
+        best_fitness_history (List[float]): Lista con el mejor fitness de cada generación.
+        avg_fitness_history (List[float]): Lista con el fitness promedio de cada generación.
+    """
+    csv_path = 'outputs/fitness_log.csv'
+    with open(csv_path, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        # Escribir encabezado
+        writer.writerow(['Generación', 'Mejor Fitness', 'Fitness Promedio'])
+        # Escribir datos por generación
+        for gen, (best, avg) in enumerate(zip(best_fitness_history, avg_fitness_history)):
+            writer.writerow([gen, f"{best:.6f}", f"{avg:.6f}"])
+    
+    print(f"Historial de fitness guardado en {csv_path}")
+
+def plot_evolution(best_fitness_history: List[float], avg_fitness_history: List[float], args) -> None:
+    """
+    Genera un gráfico de la evolución del fitness a lo largo de las generaciones.
+    
+    Args:
+        best_fitness_history (List[float]): Lista con el mejor fitness de cada generación.
+        avg_fitness_history (List[float]): Lista con el fitness promedio de cada generación.
         args (argparse.Namespace): Argumentos de configuración.
     """
     generations = list(range(len(avg_fitness_history)))
     
     plt.figure(figsize=(10, 6))
-    plt.plot(generations, avg_fitness_history, marker='o')
-    plt.title('Evolución del Fitness Promedio')
+    
+    # Graficar ambas curvas: mejor fitness y fitness promedio
+    plt.plot(generations, best_fitness_history, marker='o', color='green', label='Mejor Fitness')
+    plt.plot(generations, avg_fitness_history, marker='s', color='blue', label='Fitness Promedio')
+    
+    plt.title('Evolución del Fitness por Generación')
     plt.xlabel('Generación')
-    plt.ylabel('Fitness Promedio')
+    plt.ylabel('Fitness')
     plt.grid(True)
+    plt.legend()
     
     # Añadimos información de configuración
     config_info = (
@@ -99,8 +134,32 @@ def plot_evolution(avg_fitness_history, args):
     plt.figtext(0.5, 0.01, config_info, ha='center', fontsize=9)
     
     plt.tight_layout()
-    plt.savefig('fitness_evolution.png')
+    
+    # Guardar en la carpeta outputs
+    output_path = 'outputs/fitness_evolution.png'
+    plt.savefig(output_path)
+    print(f"Gráfico de evolución guardado en {output_path}")
+    
     plt.show()
+
+def get_population_stats(population: List[Idea]) -> Tuple[float, float]:
+    """
+    Calcula estadísticas de la población.
+    
+    Args:
+        population (List[Idea]): Población de ideas.
+        
+    Returns:
+        Tuple[float, float]: Mejor fitness y fitness promedio de la población.
+    """
+    # Ordenar por fitness (de mayor a menor)
+    sorted_population = sorted(population, key=lambda idea: idea.fitness, reverse=True)
+    
+    # Calcular estadísticas
+    avg_fitness = sum(idea.fitness for idea in population) / len(population)
+    best_fitness = sorted_population[0].fitness
+    
+    return best_fitness, avg_fitness
 
 def main():
     """
@@ -137,20 +196,53 @@ def main():
         elite_size=args.elite
     )
     
+    # Calcular el mejor fitness para cada generación
+    best_fitness_history = []
+    
+    # Recrear la evolución para calcular el mejor fitness
+    population = initialize_population(args.population, generate_random_idea)
+    evaluate_population(population, simulate_llm_evaluation)
+    
+    # Obtener stats de la población inicial
+    best_fitness, _ = get_population_stats(population)
+    best_fitness_history.append(best_fitness)
+    
+    # Reconstruir el historial del mejor fitness
+    for i in range(args.generations):
+        # Evolucionamos para obtener la población en cada generación
+        population = evolve(
+            population,
+            simulate_llm_evaluation,
+            simulate_llm_crossover,
+            simulate_llm_mutation,
+            args.crossover_rate,
+            args.mutation_rate,
+            args.mutation_strength,
+            args.elite
+        )
+        
+        # Calcular y almacenar el mejor fitness de esta generación
+        best_fitness, _ = get_population_stats(population)
+        best_fitness_history.append(best_fitness)
+    
     # Imprimir estadísticas de la población final
-    print_population_stats(final_population, args.generations)
+    best_fitness, avg_fitness = print_population_stats(final_population, args.generations)
+    
+    # Guardar el historial de fitness en CSV
+    save_fitness_log(best_fitness_history, avg_fitness_history)
     
     # Mostrar gráfico de evolución
     if not args.no_plot:
         try:
-            plot_evolution(avg_fitness_history, args)
+            plot_evolution(best_fitness_history, avg_fitness_history, args)
         except ImportError:
             print("Advertencia: Matplotlib no está instalado. No se puede generar el gráfico.")
             print("Instale matplotlib usando: pip install matplotlib")
     
     print("\n=== Proceso completado ===")
     print(f"Se generaron {args.generations} generaciones con {args.population} ideas por generación.")
-    print("Mejores ideas guardadas en la población final.")
+    print(f"CSV guardado en: outputs/fitness_log.csv")
+    print(f"Gráfico guardado en: outputs/fitness_evolution.png")
 
 if __name__ == "__main__":
     main()

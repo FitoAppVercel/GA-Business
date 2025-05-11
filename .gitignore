@@ -46,3 +46,6 @@ Thumbs.db
 
 # Matplotlib generated files
 fitness_evolution.png
+
+# Output directory
+outputs/
