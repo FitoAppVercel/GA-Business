@@ -34,10 +34,25 @@ git clone https://github.com/tu-usuario/GA-Business.git
 cd GA-Business
 ```
 
-### 2. Instalar Dependencias
+### 2. Configurar Entorno Virtual e Instalar Dependencias
+
+Crear y activar un entorno virtual:
 
 ```bash
-pip install matplotlib
+python3 -m venv venv
+source venv/bin/activate
+```
+
+Instalar dependencias:
+
+```bash
+pip3 install -r requirements.txt
+```
+
+O instalar sólo matplotlib:
+
+```bash
+pip3 install matplotlib
 ```
 
 ### 3. Ejecutar el Algoritmo
@@ -45,13 +60,13 @@ pip install matplotlib
 Ejecución básica:
 
 ```bash
-python main.py
+python3 main.py
 ```
 
 Ejecución con parámetros personalizados:
 
 ```bash
-python main.py --population 30 --generations 20 --mutation-rate 0.3 --crossover-rate 0.7
+python3 main.py --population 30 --generations 20 --mutation-rate 0.3 --crossover-rate 0.7
 ```
 
 Parámetros disponibles:
